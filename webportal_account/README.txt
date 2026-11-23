@@ -39,3 +39,13 @@ PASSWORD POLICY: includes/functions.php -> validate_password_strength():
 min 8 characters, 1 lowercase, 1 uppercase, 1 number, enforced server-side.
 
 ONE-TO-MANY: users (PARENT) 1 --- * accounts (CHILDREN)
+
+RECYCLE BIN + IMAGE (children entity)
+  New install: schema.sql already includes image_path / deleted_at / deleted_by.
+  Existing database: import database/upgrade_recycle_image.sql.
+  Delete on seller/records.php is now a SOFT delete (sets deleted_at/deleted_by).
+  seller/trash.php lists deleted records with who deleted them and when, and
+  a Restore button that clears deleted_at/deleted_by.
+  record_form.php has an Image upload field (jpg/png/gif/webp, 2MB max); the
+  file is validated by real content type (not just the extension) and saved
+  under uploads/accounts/. seller/records.php shows a thumbnail per record.

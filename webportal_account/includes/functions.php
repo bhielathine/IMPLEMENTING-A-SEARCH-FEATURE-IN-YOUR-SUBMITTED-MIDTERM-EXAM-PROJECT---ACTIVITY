@@ -72,6 +72,27 @@ function game_meta_all(): array {
 }
 function game_meta(string $name): ?array { return game_meta_all()[$name] ?? null; }
 
+/* One image per children-entity record. Validates real file type (not just the
+   extension the browser sends) and size, replaces the old file on re-upload.
+   Returns [filename-or-null, error-or-null]. Stores only the filename in the
+   DB; build the URL as BASE_URL . '/uploads/accounts/' . $filename. */
+function handle_image_upload(string $field, ?string $existing): array {
+    if (empty($_FILES[$field]['name'])) return [$existing, null];
+    $f = $_FILES[$field];
+    if ($f['error'] !== UPLOAD_ERR_OK) return [$existing, 'Image upload failed.'];
+    if ($f['size'] > 2 * 1024 * 1024) return [$existing, 'Image must be under 2MB.'];
+
+    $allowed = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp', 'image/gif' => 'gif'];
+    $mime = mime_content_type($f['tmp_name']);
+    if (!isset($allowed[$mime])) return [$existing, 'Image must be JPG, PNG, GIF, or WEBP.'];
+
+    $dir = __DIR__ . '/../uploads/accounts/';
+    $name = bin2hex(random_bytes(8)) . '.' . $allowed[$mime];
+    if (!move_uploaded_file($f['tmp_name'], $dir . $name)) return [$existing, 'Could not save the image.'];
+    if ($existing && is_file($dir . basename($existing))) unlink($dir . basename($existing));
+    return [$name, null];
+}
+
 function post_button(string $action, int $id, string $label, string $class = 'btn btn-sm', string $confirm = ''): string {
     $c = $confirm ? ' data-confirm="' . e($confirm) . '"' : '';
     return '<form method="post" class="inline"' . $c . '>' . csrf_field()

@@ -79,3 +79,10 @@ CREATE TABLE IF NOT EXISTS activity_log (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_log_user FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
+
+-- RECYCLE BIN + IMAGE (children entity)
+ALTER TABLE accounts
+    ADD COLUMN image_path VARCHAR(255) NULL AFTER user_notes,
+    ADD COLUMN deleted_at DATETIME NULL,
+    ADD COLUMN deleted_by INT NULL,
+    ADD CONSTRAINT fk_acc_deleted FOREIGN KEY (deleted_by) REFERENCES users(user_id) ON DELETE SET NULL;

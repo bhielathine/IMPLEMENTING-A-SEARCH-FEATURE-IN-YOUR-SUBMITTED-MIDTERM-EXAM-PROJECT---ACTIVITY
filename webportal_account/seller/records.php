@@ -52,9 +52,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         log_activity('UPDATE', 'accounts', $id, 'Marked record as available again');
         flash('success', 'Marked as available again.');
     } elseif ($action === 'delete') {
-        log_activity('DELETE', 'accounts', $id, 'Deleted record');
-        $pdo->prepare('DELETE FROM accounts WHERE account_id=? AND seller_id=?')->execute([$id, $uid]);
-        flash('success', 'Record deleted.');
+        // soft delete: row moves to the recycle bin instead of being removed
+        $pdo->prepare('UPDATE accounts SET deleted_at=NOW(), deleted_by=? WHERE account_id=? AND seller_id=?')
+            ->execute([$uid, $id, $uid]);
+        log_activity('DELETE', 'accounts', $id, 'Moved record to recycle bin');
+        flash('success', 'Record moved to the recycle bin.');
     } else {
         flash('error', 'That action is not available for this record.');
     }
@@ -64,13 +66,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 /* ---------- SEARCH (children entity) ---------- */
 $q = trim($_GET['q'] ?? '');
 $sql = 'SELECT a.account_id, g.game_name, a.pseudonym, a.selling_price, a.account_level, a.rank_tier,
-               a.status, a.date_added, a.last_updated,
+               a.status, a.image_path, a.date_added, a.last_updated,
                ab.username AS added_by_name, ub.username AS updated_by_name
         FROM accounts a
         JOIN games g ON g.game_id = a.game_id
         LEFT JOIN users ab ON ab.user_id = a.added_by
         LEFT JOIN users ub ON ub.user_id = a.updated_by
-        WHERE a.seller_id = ?';
+        WHERE a.seller_id = ? AND a.deleted_at IS NULL';
 $params = [$uid];
 if ($q !== '') {
     $sql .= ' AND (a.pseudonym LIKE ? OR g.game_name LIKE ? OR a.description LIKE ?)';
@@ -101,7 +103,10 @@ include __DIR__ . '/../includes/header.php';
         <h1>My records</h1>
         <p class="muted">Search, then update, publish, or delete any of your records.</p>
     </div>
-    <a class="btn" href="<?= BASE_URL ?>/seller/record_form.php">Add record</a>
+    <div class="row">
+        <a class="btn btn-ghost" href="<?= BASE_URL ?>/seller/trash.php">Recycle bin</a>
+        <a class="btn" href="<?= BASE_URL ?>/seller/record_form.php">Add record</a>
+    </div>
 </div>
 
 <!-- SEARCH: children entity -->
@@ -123,7 +128,7 @@ include __DIR__ . '/../includes/header.php';
 <div class="glass card table-wrap">
 <table>
     <thead>
-        <tr><th>Pseudonym</th><th>Game</th><th>Price</th><th>Level</th><th>Rank</th><th>Status</th><th>Offers</th>
+        <tr><th>Image</th><th>Pseudonym</th><th>Game</th><th>Price</th><th>Level</th><th>Rank</th><th>Status</th><th>Offers</th>
             <th>Added by</th><th>Date added</th><th>Last updated by</th><th>Last updated</th><th>Actions</th></tr>
     </thead>
     <tbody>
@@ -134,6 +139,13 @@ include __DIR__ . '/../includes/header.php';
         $accepted = array_values(array_filter($list, fn($o) => $o['status'] === 'accepted'));
     ?>
         <tr>
+            <td>
+                <?php if ($r['image_path']): ?>
+                    <img class="thumb" src="<?= BASE_URL ?>/uploads/accounts/<?= e($r['image_path']) ?>" alt="">
+                <?php else: ?>
+                    <span class="muted small">-</span>
+                <?php endif; ?>
+            </td>
             <td><?= e($r['pseudonym']) ?></td>
             <td><?= e($r['game_name']) ?></td>
             <td><?= peso($r['selling_price']) ?></td>

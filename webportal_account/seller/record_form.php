@@ -55,6 +55,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$rec && $pwdInput === '') $errors[] = 'Account password is required.';
     if (strlen($pwdInput) > 100)   $errors[] = 'Account password is too long (max 100 characters).';
 
+    [$imagePath, $imageErr] = handle_image_upload('image', $rec['image_path'] ?? null);
+    if ($imageErr) $errors[] = $imageErr;
+
     $bday  = ($meta && $meta['group'] === 'hoyo' && isset($_POST['birthday_binded'])) ? 1 : 0;
     $uname = ($meta && $meta['group'] === 'hoyo' && isset($_POST['username_binded'])) ? 1 : 0;
     $email = ($meta && $meta['group'] === 'ml'   && isset($_POST['email_binded']))    ? 1 : 0;
@@ -68,19 +71,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                stamped on every save, so this is the proof point for #10. */
             $pdo->prepare(
                 'UPDATE accounts SET pseudonym=?, selling_price=?, account_level=?, rank_tier=?, featured_items=?, description=?,
-                        birthday_binded=?, username_binded=?, email_binded=?, account_password=?, user_notes=?,
+                        birthday_binded=?, username_binded=?, email_binded=?, account_password=?, user_notes=?, image_path=?,
                         updated_by=?, last_updated=NOW()
                  WHERE account_id=? AND seller_id=?'
-            )->execute([$pseudonym, $price, $level, $rank, $items, $desc, $bday, $uname, $email, $enc, $notes, $uid, $id, $uid]);
+            )->execute([$pseudonym, $price, $level, $rank, $items, $desc, $bday, $uname, $email, $enc, $notes, $imagePath, $uid, $id, $uid]);
             log_activity('UPDATE', 'accounts', $id, "Edited $gameName record");
             flash('success', 'Record updated.');
         } else {
             $enc = encrypt_text($pwdInput);
             $pdo->prepare(
                 'INSERT INTO accounts (seller_id, game_id, pseudonym, selling_price, account_level, rank_tier, featured_items, description,
-                        birthday_binded, username_binded, email_binded, account_password, user_notes, added_by, updated_by)
-                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
-            )->execute([$uid, $gameId, $pseudonym, $price, $level, $rank, $items, $desc, $bday, $uname, $email, $enc, $notes, $uid, $uid]);
+                        birthday_binded, username_binded, email_binded, account_password, user_notes, image_path, added_by, updated_by)
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
+            )->execute([$uid, $gameId, $pseudonym, $price, $level, $rank, $items, $desc, $bday, $uname, $email, $enc, $notes, $imagePath, $uid, $uid]);
             // date_added is stamped automatically by the column's DEFAULT CURRENT_TIMESTAMP
             log_activity('INSERT', 'accounts', (int)$pdo->lastInsertId(), "Added $gameName record");
             flash('success', 'Record added.');
@@ -93,6 +96,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'account_level' => $_POST['account_level'] ?? '', 'rank_tier' => $_POST['rank_tier'] ?? '',
         'featured_items' => $items, 'description' => $desc, 'user_notes' => $notes,
         'birthday_binded' => $bday, 'username_binded' => $uname, 'email_binded' => $email,
+        'image_path' => $imagePath,
     ]);
     $typedPassword = $pwdInput;
 }
@@ -113,7 +117,7 @@ include __DIR__ . '/../includes/header.php';
 </div>
 <?php endif; ?>
 
-<form method="post" class="glass card form-grid" id="recordForm" autocomplete="off">
+<form method="post" enctype="multipart/form-data" class="glass card form-grid" id="recordForm" autocomplete="off">
     <?= csrf_field() ?>
     <input type="hidden" name="account_id" value="<?= $id ?>">
 
@@ -165,6 +169,14 @@ include __DIR__ . '/../includes/header.php';
         <label class="check" data-group="hoyo"><input type="checkbox" name="username_binded" <?= !empty($rec['username_binded']) ? 'checked' : '' ?>> Username binded</label>
         <label class="check" data-group="ml"><input type="checkbox" name="email_binded" <?= !empty($rec['email_binded']) ? 'checked' : '' ?>> Email binded</label>
     </div>
+
+    <label class="full">Image
+        <?php if (!empty($rec['image_path'])): ?>
+            <img class="thumb thumb-lg" src="<?= BASE_URL ?>/uploads/accounts/<?= e($rec['image_path']) ?>" alt="">
+        <?php endif; ?>
+        <input type="file" name="image" accept="image/jpeg,image/png,image/webp,image/gif">
+    </label>
+    <p class="hint">JPG, PNG, GIF, or WEBP, up to 2MB. <?= !empty($rec['image_path']) ? 'Leave blank to keep the current image.' : '' ?></p>
 
     <h2 class="full">Seller only <span class="muted small">(hidden from the market)</span></h2>
 
